@@ -98,9 +98,6 @@ details.grp>summary .en{font-family:var(--f-wide);font-size:9.5px;letter-spacing
 .sl input{width:100%;accent-color:var(--accent)}
 .sl output{text-align:right;font-variant-numeric:tabular-nums}
 .img-actions{display:flex;gap:6px;flex-wrap:wrap}
-.cut{display:flex;flex-direction:column;gap:8px;margin-top:10px;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--panel-2)}
-.chk{display:flex;gap:8px;align-items:center;font-size:12.5px;cursor:pointer}
-.chk input{accent-color:var(--accent);width:16px;height:16px}
 .thumb{background-color:transparent;background-image:none}
 .thumb.has{background-size:cover,16px 16px;background-position:center,0 0;
   background-image:var(--t),repeating-conic-gradient(#8885 0 25%,transparent 0 50%)}
@@ -234,7 +231,7 @@ const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt
 const uid = () => "c" + Math.random().toString(36).slice(2, 8);
 const DATA_PATH = "data/cards.json";
 const DRAFT_KEY = "profile-studio-draft-v1";
-const PRESETS = ["#3d63ff","#2fd39a","#9b7bff","#ff5d73","#ffb547","#3fc4ff","#e8e8e8","#ff7ad9"];
+const PRESETS = ["#ff5d73","#e5484d","#8b1e3f","#ff7a59","#ff9f1c","#ffb547","#f5c542","#c08457","#ff8fab","#ff7ad9","#c9ced6","#e8e8e8","#f2e8cf"];
 
 let data = { version: 1, savedAt: 0, cards: [] };
 let current = null;          // card id
@@ -247,13 +244,13 @@ let confirmDelete = false;
 /* ---------- helpers ---------- */
 function blankCard() {
   return {
-    id: uid(), series: "SERIES", index: "01 / 01", fileLabel: "PERSONNEL FILE",
+    id: uid(), series: "SERIES", index: "01 / 01", fileLabel: "CHARACTER FILE",
     codename: "CODENAME", name: "이름", nameEn: "NAME", accent: "#3d63ff", bg: "#07080f",
     stats: [
       { label: "AGE", note: "", value: "00", unit: "세" },
       { label: "HEIGHT", note: "", value: "000", unit: "cm" },
       { label: "FROM", note: "", value: "출신", unit: "" },
-      { label: "IMPRINT", note: "", value: "각인", unit: "" }
+      { label: "TYPE", note: "", value: "분류", unit: "" }
     ],
     quote: "", headline: "한 줄 소개에서 *강조할 부분*을 별표로 감싸세요.",
     intro: "첫 번째 문단.\n\n두 번째 문단.",
@@ -267,8 +264,8 @@ function blankCard() {
       { ko: "관계", en: "RELATIONS", body: "" }
     ],
     footnote: "",
-    hero: { src: "", x: 50, y: 50, zoom: 1, opacity: 1, orig: "" },
-    portrait: { src: "", x: 50, y: 30, zoom: 1, opacity: 1, orig: "", cutout: false, fadeBottom: true }
+    hero: { src: "", x: 50, y: 50, zoom: 1 },
+    portrait: { src: "", x: 50, y: 30, zoom: 1, opacity: 1 }
   };
 }
 function normalize(c) {
@@ -333,7 +330,7 @@ function renderCard(c) {
   const nb = Math.max(0, Math.min(c.sections.length, Number(c.besidePortrait) || 0));
   const hasP = !!(c.portrait && c.portrait.src);
   const left = c.sections.slice(0, hasP ? nb : 0), rest = c.sections.slice(hasP ? nb : 0);
-  const portrait = hasP ? `<div class="pc-portrait"><div class="frame">${imgLayer(c.portrait)}${c.portrait.cutout ? "" : '<div class="fade-l"></div>'}${c.portrait.fadeBottom === false ? "" : '<div class="fade"></div>'}</div>
+  const portrait = hasP ? `<div class="pc-portrait"><div class="frame">${imgLayer(c.portrait)}<div class="fade-l"></div><div class="fade"></div></div>
       ${c.sideText ? `<div class="pc-side"><span>${esc(c.sideText)}</span></div>` : ""}</div>` : "";
   return `<div class="pc" style="${style}">
     <div class="pc-hero${c.hero && c.hero.src ? "" : " empty"}">${imgLayer(c.hero)}<div class="shade-top"></div><div class="shade-bot"></div></div>
@@ -358,7 +355,7 @@ function renderCard(c) {
 function fitCode(root) {
   const el = root.querySelector(".pc-code"); if (!el) return;
   const max = el.clientWidth || 470;
-  let size = 132; el.style.fontSize = size + "px";
+  let size = 52; el.style.fontSize = size + "px";
   while (el.scrollWidth > max && size > 34) { size -= 2; el.style.fontSize = size + "px"; }
   const side = root.querySelector(".pc-side span");
   if (side) {
@@ -390,7 +387,15 @@ new ResizeObserver(entries => {
   if (w === lastW) return; lastW = w;
   requestAnimationFrame(scalePreview);
 }).observe(stage);
-document.fonts && document.fonts.ready.then(() => renderPreview());
+// The card's sizes are measured in JS, so they must be measured with the real fonts.
+// fonts.ready alone can resolve before the web fonts even start loading, so request them explicitly
+// and re-fit whenever any font finishes arriving.
+const FONT_FACES = ['700 100px "Syncopate"', '400 20px "Michroma"', '400 20px "Noto Sans KR"', '800 20px "Noto Sans KR"', '900 20px "Noto Sans KR"'];
+const fontsReady = document.fonts
+  ? Promise.race([Promise.all(FONT_FACES.map(f => document.fonts.load(f, "가A1").catch(() => null))), new Promise(r => setTimeout(r, 8000))])
+  : Promise.resolve();
+fontsReady.then(() => renderPreview());
+if (document.fonts) document.fonts.addEventListener("loadingdone", () => schedulePreview());
 
 /* ---------- tabs ---------- */
 function renderTabs() {
@@ -426,16 +431,9 @@ function imgEditor(key, title) {
   const sl = (k, label, min, max, step) => `<label class="sl"><span>${label}</span><input type="range" id="r-${key}-${k}" data-p="${key}.${k}" min="${min}" max="${max}" step="${step}" value="${im[k]}"><output>${k === "zoom" ? Number(im[k]).toFixed(2) : im[k]}</output></label>`;
   return `<div class="f"><span>${title}</span><div class="imgbox">
     <div class="thumb${im.src ? " has" : ""}" style="${im.src ? `--t:url('${esc(im.src)}')` : ""}">${im.src ? "" : "이미지<br>없음"}</div>
-    <div class="sliders">${sl("x", "좌우", 0, 100, 1)}${sl("y", "상하", 0, 100, 1)}${sl("zoom", "확대", 1, 3, .01)}${sl("opacity", "불투명", 0, 1, .01)}
+    <div class="sliders">${sl("x", "좌우", 0, 100, 1)}${sl("y", "상하", 0, 100, 1)}${sl("zoom", "확대", 1, 3, .01)}${key === "portrait" ? sl("opacity", "불투명", 0, 1, .01) : ""}
       <div class="img-actions"><button class="btn" type="button" data-img="${key}">${im.src ? "교체" : "업로드"}</button>${im.src ? `<button class="btn danger" type="button" data-imgdel="${key}">빼기</button>` : ""}</div>
-    </div></div>
-    ${im.src ? `<div class="cut">
-      <div class="sl"><span>범위</span><input type="range" id="tol-${key}" min="4" max="120" step="1" value="${tolerance[key] || 36}" data-tol="${key}"><output>${tolerance[key] || 36}</output></div>
-      <div class="img-actions"><button class="btn" type="button" data-cut="${key}">배경 지우기</button>${im.orig ? `<button class="btn ghost" type="button" data-uncut="${key}">원본으로</button>` : ""}</div>
-      <p class="hint">가장자리와 이어진 비슷한 색을 투명하게 지워요. 단색·그라데이션 배경에 잘 맞아요. 덜 지워지면 범위를 올리세요. 이미 투명한 PNG는 그대로 올리면 투명이 유지돼요.</p>
-      ${key === "portrait" ? `<label class="chk"><input type="checkbox" id="chk-cutout" data-p="portrait.cutout"${im.cutout ? " checked" : ""}> 투명 이미지용 (왼쪽 그늘 없애기)</label>
-      <label class="chk"><input type="checkbox" id="chk-fadeb" data-p="portrait.fadeBottom"${im.fadeBottom === false ? "" : " checked"}> 아래쪽 흐리게</label>` : ""}
-    </div>` : ""}</div>`;
+    </div></div></div>`;
 }
 function renderForm() {
   const ed = $("#editor"), c = card();
@@ -499,7 +497,6 @@ function setPath(obj, path, val) {
 let rafPending = false;
 function schedulePreview() { if (rafPending) return; rafPending = true; requestAnimationFrame(() => { rafPending = false; renderPreview(); }); }
 $("#editor").addEventListener("input", e => {
-  if (e.target.dataset.tol) { tolerance[e.target.dataset.tol] = Number(e.target.value); e.target.nextElementSibling.textContent = e.target.value; return; }
   const p = e.target.dataset.p; if (!p) return;
   const c = card(); let v = e.target.type === "checkbox" ? e.target.checked : e.target.value;
   if (p === "marquee") v = v.split(",").map(s => s.trim()).filter(Boolean);
@@ -514,9 +511,7 @@ $("#editor").addEventListener("click", e => {
   const c = card();
   if (b.dataset.preset) { c.accent = b.dataset.preset; renderForm(); renderTabs(); markDirty(); renderPreview(); return; }
   if (b.dataset.img) { pendingImg = b.dataset.img; $("#file-img").value = ""; $("#file-img").click(); return; }
-  if (b.dataset.imgdel) { c[b.dataset.imgdel].src = ""; c[b.dataset.imgdel].orig = ""; renderForm(); markDirty(); renderPreview(); return; }
-  if (b.dataset.cut) { cutBackground(b.dataset.cut, b); return; }
-  if (b.dataset.uncut) { const im = c[b.dataset.uncut]; im.src = im.orig; im.orig = ""; if (b.dataset.uncut === "portrait") im.cutout = false; renderForm(); markDirty(); renderPreview(); return; }
+  if (b.dataset.imgdel) { c[b.dataset.imgdel].src = ""; renderForm(); markDirty(); renderPreview(); return; }
   if (b.dataset.add === "stats") c.stats.push({ label: "LABEL", note: "", value: "", unit: "" });
   else if (b.dataset.add === "sections") c.sections.push({ ko: "새 항목", en: "SECTION", body: "" });
   else if (b.dataset.del) { const [arr, i] = b.dataset.del.split("."); c[arr].splice(Number(i), 1); }
@@ -530,7 +525,6 @@ $("#editor").addEventListener("click", e => {
 });
 
 /* ---------- images ---------- */
-const tolerance = { hero: 36, portrait: 36 };
 function downscale(file, maxSide = 1800) {
   // PNG / WebP / GIF / SVG may carry transparency: keep it as PNG. Everything else becomes JPEG.
   const keepAlpha = /png|webp|gif|svg/i.test(file.type);
@@ -554,59 +548,12 @@ async function storeImage(blob) {
   }
   return blobToDataURL(blob);
 }
-/* Background removal: flood-fill from every edge pixel through colors close to the
-   edge's dominant color; pixels near the threshold get partial alpha for a soft edge. */
-function loadImg(src) {
-  return new Promise((res, rej) => { const i = new Image(); i.crossOrigin = "anonymous"; i.onload = () => res(i); i.onerror = () => rej(new Error("이미지를 읽지 못했어요")); i.src = src; });
-}
-async function cutBackground(key, btn) {
-  const c = card(), im = c[key]; if (!im.src) return;
-  btn.disabled = true; setStatus("배경 지우는 중…");
-  try {
-    const source = im.orig || im.src;
-    const img = await loadImg(source);
-    const W = img.naturalWidth, H = img.naturalHeight;
-    const cv = document.createElement("canvas"); cv.width = W; cv.height = H;
-    const ctx = cv.getContext("2d"); ctx.drawImage(img, 0, 0);
-    const id = ctx.getImageData(0, 0, W, H), d = id.data;
-    // dominant edge color: average of border pixels in the most common coarse bucket
-    const buckets = new Map();
-    const addB = i => { const k = (d[i] >> 4) << 8 | (d[i + 1] >> 4) << 4 | (d[i + 2] >> 4); const b = buckets.get(k) || [0, 0, 0, 0]; b[0] += d[i]; b[1] += d[i + 1]; b[2] += d[i + 2]; b[3]++; buckets.set(k, b); };
-    for (let x = 0; x < W; x++) { addB(x * 4); addB(((H - 1) * W + x) * 4); }
-    for (let y = 0; y < H; y++) { addB(y * W * 4); addB((y * W + W - 1) * 4); }
-    let best = null; for (const b of buckets.values()) if (!best || b[3] > best[3]) best = b;
-    const ref = [best[0] / best[3], best[1] / best[3], best[2] / best[3]];
-    const tol = tolerance[key] || 36, soft = tol * 0.6;
-    const dist = i => { const r = d[i] - ref[0], g = d[i + 1] - ref[1], b = d[i + 2] - ref[2]; return Math.sqrt(r * r + g * g + b * b); };
-    const seen = new Uint8Array(W * H), stack = new Int32Array(W * H); let sp = 0;
-    const push = p => { if (!seen[p]) { seen[p] = 1; stack[sp++] = p; } };
-    for (let x = 0; x < W; x++) { push(x); push((H - 1) * W + x); }
-    for (let y = 0; y < H; y++) { push(y * W); push(y * W + W - 1); }
-    while (sp) {
-      const p = stack[--sp], i = p * 4, dd = dist(i);
-      if (d[i + 3] === 0) { /* already clear: keep walking */ }
-      else if (dd <= tol) d[i + 3] = 0;
-      else { if (dd <= tol + soft) d[i + 3] = Math.min(d[i + 3], Math.round(255 * (dd - tol) / soft)); continue; }
-      const x = p % W;
-      if (x > 0) push(p - 1); if (x < W - 1) push(p + 1);
-      if (p >= W) push(p - W); if (p < W * (H - 1)) push(p + W);
-    }
-    ctx.putImageData(id, 0, 0);
-    const blob = await new Promise(r => cv.toBlob(r, "image/png"));
-    const url = await storeImage(blob);
-    if (!im.orig) im.orig = im.src;
-    im.src = url; if (key === "portrait") im.cutout = true;
-    markDirty(); renderForm(); renderPreview();
-  } catch (err) { console.error(err); setStatus("배경 지우기 실패", "err"); toast("배경을 지우지 못했어요: " + (err.message || err)); }
-  finally { btn.disabled = false; }
-}
 $("#file-img").addEventListener("change", async e => {
   const f = e.target.files[0]; if (!f || !pendingImg) return;
   const key = pendingImg, c = card(); setStatus("이미지 올리는 중…");
   try {
     const blob = await downscale(f);
-    c[key].src = await storeImage(blob); c[key].orig = ""; c[key].x = 50; c[key].y = key === "hero" ? 40 : 25; c[key].zoom = 1;
-    if (key === "portrait") c[key].cutout = blob.type === "image/png";
+    c[key].src = await storeImage(blob); c[key].x = 50; c[key].y = key === "hero" ? 40 : 25; c[key].zoom = 1;
     markDirty(); renderForm(); renderPreview();
   } catch (err) { setStatus(err.message || "이미지 업로드 실패", "err"); }
 });
@@ -671,8 +618,8 @@ $("#btn-png").addEventListener("click", async () => {
   const btn = $("#btn-png"); btn.disabled = true; setStatus("PNG 만드는 중…");
   const host = $("#export-host");
   try {
+    await fontsReady;
     host.innerHTML = renderCard(c); fitCode(host);
-    if (document.fonts) await document.fonts.ready;
     await waitImages(host);
     const el = host.firstElementChild;
     const canvas = await html2canvas(el, { scale: 2, backgroundColor: c.bg, useCORS: true, logging: false, width: 1000, height: el.offsetHeight, windowWidth: 1200 });
